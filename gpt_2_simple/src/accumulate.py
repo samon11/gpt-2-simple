@@ -7,18 +7,19 @@ import time
 
 
 class AccumulatingOptimizer(object):
-    def __init__(self, opt, var_list):
+    def __init__(self, opt, var_list, dtype=tf.float32):
         self.opt = opt
         self.var_list = var_list
+        self.dtype = dtype
         self.accum_vars = {tv : tf.Variable(tf.zeros_like(tv.read_value()), trainable=False)
                            for tv in var_list}
-        self.total_loss = tf.Variable(tf.zeros(shape=[], dtype=tf.float32))
-        self.count_loss = tf.Variable(tf.zeros(shape=[], dtype=tf.float32))
+        self.total_loss = tf.Variable(tf.zeros(shape=[], dtype=dtype))
+        self.count_loss = tf.Variable(tf.zeros(shape=[], dtype=dtype))
 
     def reset(self):
         updates = [tv.assign(tf.zeros_like(tv)) for tv in self.accum_vars.values()]
-        updates.append(self.total_loss.assign(tf.zeros(shape=[], dtype=tf.float32)))
-        updates.append(self.count_loss.assign(tf.zeros(shape=[], dtype=tf.float32)))
+        updates.append(self.total_loss.assign(tf.zeros(shape=[], dtype=self.dtype)))
+        updates.append(self.count_loss.assign(tf.zeros(shape=[], dtype=self.dtype)))
         with tf.control_dependencies(updates):
             return tf.no_op()
 

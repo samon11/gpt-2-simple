@@ -23,6 +23,7 @@ except:
 from gpt_2_simple.src import model, sample, encoder, memory_saving_gradients
 from gpt_2_simple.src.load_dataset import load_dataset, Sampler
 from gpt_2_simple.src.accumulate import AccumulatingOptimizer
+from gpt_2_simple.src.save_builder import CastFromFloat32SaverBuilder
 
 
 def download_file_with_progress(url_base, sub_dir, model_name, file_name):
@@ -137,7 +138,8 @@ def finetune(sess,
              use_memory_saving_gradients=False,
              only_train_transformer_layers=False,
              optimizer='adam',
-             overwrite=False):
+             overwrite=False,
+             dtype=tf.float32):
     """Finetunes the model on the given dataset.
 
     Adapted from https://github.com/nshepperd/gpt-2/blob/finetuning/train.py.
@@ -168,6 +170,7 @@ def finetune(sess,
 
     enc = encoder.get_encoder(checkpoint_path)
     hparams = model.default_hparams()
+    hparams.dtype = dtype
     with open(os.path.join(checkpoint_path, 'hparams.json')) as f:
         hparams.override_from_dict(json.load(f))
 
@@ -207,7 +210,8 @@ def finetune(sess,
             exit("Memory saving gradients are not implemented for gradient accumulation yet.")
         opt = AccumulatingOptimizer(
             opt=opt,
-            var_list=train_vars)
+            var_list=train_vars,
+            dtype=hparams.dtype)
         opt_reset = opt.reset()
         opt_compute = opt.compute_gradients(loss)
         opt_apply = opt.apply_gradients()
@@ -223,9 +227,11 @@ def finetune(sess,
 
     summary_log = tf.compat.v1.summary.FileWriter(checkpoint_path)
 
+    builder = CastFromFloat32SaverBuilder() if hparams.dtype != tf.float32 else None
     saver = tf.compat.v1.train.Saver(
         var_list=all_vars,
-        max_to_keep=max_checkpoints)
+        max_to_keep=max_checkpoints,
+        builder=builder)
     sess.run(tf.compat.v1.global_variables_initializer())
 
     if restore_from == 'latest':
@@ -318,6 +324,7 @@ def finetune(sess,
 
             if accumulate_gradients > 1:
                 sess.run(opt_reset)
+                j = sample_batch()
                 for _ in range(accumulate_gradients):
                     sess.run(
                         opt_compute, feed_dict={context: sample_batch()})
